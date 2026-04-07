@@ -67,7 +67,7 @@ pipeline {
                 } else {
                     sh """
                     git tag ${APP_VERSION}
-                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/sonyvinny77/my-jsp.git ${APP_VERSION}
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/App-Repo.git ${APP_VERSION}
                     """
                 }
             }
