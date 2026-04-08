@@ -2,26 +2,27 @@ pipeline {
     agent any
 
     tools {
-        maven 'Maven'
+        maven 'maven'
+        jdk 'jdk21'
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Build & Test') {
             steps {
-                checkout scm
+                sh "mvn clean verify"
             }
         }
 
-        stage('Build & SonarQube Analysis') {
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh 'mvn clean verify sonar:sonar'
+                    sh "mvn sonar:sonar"
                 }
             }
         }
 
-        stage("Quality Gate") {
+        stage('Quality Gate') {
             steps {
                 timeout(time: 3, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
@@ -57,5 +58,14 @@ pipeline {
             }
         }
 
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully"
+        }
+        failure {
+            echo "❌ Pipeline failed"
+        }
     }
 }
