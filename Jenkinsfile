@@ -1,13 +1,8 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-        jdk 'Java21'
-    }
-
     environment {
-        JAVA_HOME = tool 'Java21'
+        JAVA_HOME = "/usr/lib/jvm/java-21-amazon-corretto"
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
@@ -22,6 +17,7 @@ pipeline {
         stage('Build & Test') {
             steps {
                 sh """
+                echo "JAVA_HOME=$JAVA_HOME"
                 java -version
                 mvn -version
                 mvn clean verify
@@ -59,12 +55,10 @@ pipeline {
             steps {
                 script {
                     def branchName = env.BRANCH_NAME
-                    echo "Creating PR from ${branchName} to dev"
 
                     withCredentials([string(credentialsId: 'github-cred', variable: 'GITHUB_TOKEN')]) {
                         sh """
-                        curl -s -o response.json -w "%{http_code}" \
-                        -X POST https://api.github.com/repos/jeevana1409/Application-Repo/pulls \
+                        curl -X POST https://api.github.com/repos/jeevana1409/Application-Repo/pulls \
                         -H "Authorization: token \$GITHUB_TOKEN" \
                         -H "Accept: application/vnd.github+json" \
                         -d '{
@@ -78,7 +72,6 @@ pipeline {
                 }
             }
         }
-
     }
 
     post {
