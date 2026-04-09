@@ -1,6 +1,11 @@
 pipeline {
     agent any
-
+    
+    environment {
+        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk' // Path to JDK
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"      // Ensure Java binaries are available
+    }
+    
     tools {
         maven 'Maven'
         jdk 'Java21'
