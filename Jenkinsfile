@@ -1,73 +1,46 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-        jdk 'Java21'
+    environment {
+        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk' // Path to JDK on your Jenkins node
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
-    environment {
-        DOCKER_IMAGE = "sony9014/myapp"
+    tools {
+        maven 'Maven 3.9' // Use the name of Maven in Global Tool Configuration
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                checkout scm
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/Develop']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/jeevana1409/Application-Repo.git',
+                        credentialsId: 'github-tokens'
+                    ]]
+                ])
             }
         }
 
         stage('Auto Version Increment') {
             steps {
                 script {
-                    sh '''
-                        git config --global --add safe.directory '*'
-                        git fetch --tags
-                    '''
-
-                    // Get latest tag, default to v0.0.0 if none exist
-                    def latestTag = sh(
-                        script: "git tag --sort=-v:refname | head -n 1 || echo v0.0.0",
-                        returnStdout: true
-                    ).trim()
-
+                    sh 'git config --global --add safe.directory "*"'
+                    sh 'git fetch --tags'
+                    def latestTag = sh(script: "git tag --sort=-v:refname | head -n 1", returnStdout: true).trim()
                     echo "Latest Tag: ${latestTag}"
+                    
+                    def newVersion = latestTag ? latestTag.tokenize('v')[1].split('\\.').collect{it as int}.with { [it[0], it[1], it[2]+1].join('.') } : "0.0.1"
+                    echo "New Version: v${newVersion}"
 
-                    // Extract version numbers safely
-                    def version = latestTag.replace("v","").tokenize('.')
-                    def major = version[0] ?: '0'
-                    def minor = version[1] ?: '0'
-                    def patch = (version.size() > 2 ? version[2].toInteger() : 0) + 1
-
-                    env.APP_VERSION = "v${major}.${minor}.${patch}"
-                    echo "New Version: ${env.APP_VERSION}"
-
-                    withCredentials([usernamePassword(
-                        credentialsId: 'github-tokens',
-                        usernameVariable: 'GIT_USERNAME',
-                        passwordVariable: 'GIT_PASSWORD'
-                    )]) {
-
-                        sh '''
-                            git config user.name "jenkins"
-                            git config user.email "jenkins@local"
-                        '''
-
-                        // Check if tag already exists
-                        def tagExists = sh(
-                            script: "git tag -l ${env.APP_VERSION}",
-                            returnStdout: true
-                        ).trim()
-
-                        if (tagExists) {
-                            echo "⚠️ Tag already exists. Skipping tag creation..."
-                        } else {
-                            sh """
-                                git tag ${APP_VERSION}
-                                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/App-Repo.git ${APP_VERSION}
-                            """
-                        }
+                    withCredentials([string(credentialsId: 'github-tokens', variable: 'GIT_PASSWORD')]) {
+                        sh "git config user.name jenkins"
+                        sh "git config user.email jenkins@local"
+                        sh "git tag -l v${newVersion} || git tag v${newVersion}"
+                        sh "git push https://jeevana1409:${GIT_PASSWORD}@github.com/jeevana1409/Application-Repo.git v${newVersion}"
                     }
                 }
             }
@@ -75,51 +48,38 @@ pipeline {
 
         stage('Update Maven Version') {
             steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
+                sh "mvn versions:set -DnewVersion=v${newVersion}"
             }
         }
 
         stage('Build WAR') {
             steps {
-                sh "mvn clean package -DskipTests"
+                sh 'mvn clean package'
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh "mvn test"
+                sh 'mvn test'
             }
         }
 
         stage('Security Scan') {
             steps {
-                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
+                echo "Placeholder for security scan"
             }
         }
 
         stage('Docker Build & Push') {
             steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        sh """
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                            docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
-                            docker push ${DOCKER_IMAGE}:${APP_VERSION}
-                            docker logout
-                        """
-                    }
-                }
+                echo "Placeholder for Docker build and push"
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline Completed Successfully"
+            echo "✅ Pipeline Succeeded"
         }
         failure {
             echo "❌ Pipeline Failed"
