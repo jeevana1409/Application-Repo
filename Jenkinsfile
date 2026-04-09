@@ -3,11 +3,10 @@ pipeline {
 
     tools {
         maven 'Maven'
+        jdk 'jdk21'
     }
 
     environment {
-        JAVA_HOME = tool 'jdk21'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
         DOCKER_IMAGE = "jeevan204/myapp"
     }
 
@@ -34,7 +33,7 @@ pipeline {
                     def tagExists = true
 
                     while(tagExists) {
-                        patch = patch + 1
+                        patch++
                         newTag = "v${major}.${minor}.${patch}"
 
                         def status = sh(
@@ -68,32 +67,57 @@ pipeline {
 
         stage('Verify Java & Maven') {
             steps {
-                sh 'java -version'
-                sh 'mvn -version'
+                script {
+                    def javaHome = tool 'jdk21'
+                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
+                        sh 'java -version'
+                        sh 'mvn -version'
+                    }
+                }
             }
         }
 
         stage('Update Maven Version') {
             steps {
-                sh "mvn versions:set -DnewVersion=${APP_VERSION} -DgenerateBackupPoms=false"
+                script {
+                    def javaHome = tool 'jdk21'
+                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
+                        sh "mvn versions:set -DnewVersion=${APP_VERSION} -DgenerateBackupPoms=false"
+                    }
+                }
             }
         }
 
         stage('Build & Package') {
             steps {
-                sh "mvn clean package -DskipTests"
+                script {
+                    def javaHome = tool 'jdk21'
+                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
+                        sh "mvn clean package -DskipTests"
+                    }
+                }
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh "mvn test"
+                script {
+                    def javaHome = tool 'jdk21'
+                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
+                        sh "mvn test"
+                    }
+                }
             }
         }
 
         stage('Deploy to Nexus') {
             steps {
-                sh "mvn deploy -DskipTests"
+                script {
+                    def javaHome = tool 'jdk21'
+                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
+                        sh "mvn deploy -DskipTests"
+                    }
+                }
             }
         }
 
