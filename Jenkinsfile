@@ -3,7 +3,7 @@ pipeline {
 
     tools {
         maven 'Maven'
-        jdk 'Jdk21'
+        jdk 'Java21'
     }
 
     stages {
@@ -41,7 +41,7 @@ pipeline {
                     def branchName = env.BRANCH_NAME
                     echo "Creating PR from ${branchName} to dev"
 
-                    withCredentials([string(credentialsId: 'github-api-creds', variable: 'GITHUB_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'github-cred', variable: 'GITHUB_TOKEN')]) {
                         sh """
                         curl -X POST https://api.github.com/repos/jeevana1409/Application-Repo/pulls \
                         -H "Authorization: token \$GITHUB_TOKEN" \
