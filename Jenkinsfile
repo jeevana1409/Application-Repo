@@ -1,26 +1,16 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven'
+        jdk 'jdk21'   // ✅ MUST match Jenkins Global Tool config name
+    }
+
     environment {
         DOCKER_IMAGE = "jeevan204/myapp"
     }
 
     stages {
-
-        stage('Setup Tools') {
-            steps {
-                script {
-                    // Set Maven
-                    def mvnHome = tool name: 'Maven', type: 'maven'
-                    env.PATH = "${mvnHome}/bin:${env.PATH}"
-
-                    // Set JDK
-                    def javaHome = tool name: 'jdk21', type: 'jdk'
-                    env.JAVA_HOME = javaHome
-                    env.PATH = "${javaHome}/bin:${env.PATH}"
-                }
-            }
-        }
 
         stage('Checkout') {
             steps {
@@ -53,14 +43,21 @@ pipeline {
                         usernameVariable: 'GIT_USERNAME',
                         passwordVariable: 'GIT_PASSWORD'
                     )]) {
-                        sh """
+                        sh '''
                         git config user.name "jenkins"
                         git config user.email "jenkins@local"
                         git tag ${APP_VERSION}
                         git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/Application-Repo.git ${APP_VERSION}
-                        """
+                        '''
                     }
                 }
+            }
+        }
+
+        stage('Verify Java & Maven') {
+            steps {
+                sh 'java -version'
+                sh 'mvn -version'
             }
         }
 
@@ -89,7 +86,7 @@ pipeline {
         }
 
         stage('Security Scan') {
-            steps {                                      
+            steps {
                 sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
             }
         }
@@ -102,12 +99,12 @@ pipeline {
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-                        sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker build -t ${DOCKER_IMAGE}:${APP_VERSION} -f webapp/Dockerfile .
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
                         docker logout
-                        """
+                        '''
                     }
                 }
             }
