@@ -3,20 +3,15 @@ pipeline {
 
     tools {
         maven 'Maven'
-        jdk 'jdk21'
     }
 
     environment {
+        JAVA_HOME = tool 'jdk21'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
         DOCKER_IMAGE = "jeevan204/myapp"
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Auto Version Increment') {
             steps {
