@@ -4,17 +4,16 @@ pipeline {
     environment {
         JAVA_HOME = tool name: 'Java21', type: 'jdk'
         PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
+        MAVEN_HOME = tool name: 'Maven', type: 'maven'
+        PATH = "${MAVEN_HOME}/bin:${env.PATH}"
     }
 
     stages {
 
         stage('Checkout SCM') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
+                checkout([$class: 'GitSCM',
                     branches: [[name: 'Develop']],
-                    doGenerateSubmoduleConfigurations: false,
-                    extensions: [],
                     userRemoteConfigs: [[
                         url: 'https://github.com/jeevana1409/Application-Repo.git',
                         credentialsId: 'github-tokens'
@@ -26,67 +25,51 @@ pipeline {
         stage('Auto Version Increment') {
             steps {
                 script {
-                    sh 'git config --global --add safe.directory "*"'
-                    
                     // Get latest tag
                     def latestTag = sh(script: "git tag --sort=-v:refname | head -n 1", returnStdout: true).trim()
                     echo "Latest Tag: ${latestTag}"
 
-                    def newVersion = "v0.0.1" // default if no tag exists
-                    if (latestTag) {
-                        def parts = latestTag.replace("v","").tokenize('.') // ["0","0","5"]
-                        def major = parts[0].toInteger()
-                        def minor = parts[1].toInteger()
-                        def patch = parts[2].toInteger() + 1 // increment patch
-                        newVersion = "v${major}.${minor}.${patch}"
-                    }
+                    // Extract version numbers
+                    def (major, minor, patch) = latestTag.replace('v', '').tokenize('.').collect { it.toInteger() }
 
-                    echo "New Version: ${newVersion}"
-                    env.NEW_VERSION = newVersion
+                    // Increment patch version
+                    patch += 1
+                    env.NEW_VERSION = "v${major}.${minor}.${patch}"
+                    echo "New Version: ${env.NEW_VERSION}"
 
-                    withCredentials([string(credentialsId: 'github-tokens', variable: 'GIT_PASSWORD')]) {
-                        sh """
-                            git config user.name jenkins
-                            git config user.email jenkins@local
-                            git tag -a ${newVersion} -m 'Auto increment'
-                            git push https://jeevana1409:${GIT_PASSWORD}@github.com/jeevana1409/Application-Repo.git ${newVersion}
-                        """
-                    }
+                    // Create git tag
+                    sh "git tag ${env.NEW_VERSION}"
+                    sh "git push origin ${env.NEW_VERSION}"
                 }
-            }
-        }
-
-        stage('Update Maven Version') {
-            steps {
-                sh "mvn versions:set -DnewVersion=${env.NEW_VERSION}"
             }
         }
 
         stage('Build WAR') {
             steps {
-                sh "mvn clean package"
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh "mvn test"
+                sh 'mvn test'
             }
         }
 
         stage('Security Scan') {
             steps {
-                // Example: run a security tool like OWASP Dependency Check
-                sh "echo 'Security scan stage - implement your scanner here'"
+                echo 'Running security scan...' 
+                // Example: add your actual security scan tool here
             }
         }
 
         stage('Docker Build & Push') {
             steps {
                 script {
-                    def dockerImage = "jeevana1409/app:${env.NEW_VERSION}"
-                    sh "docker build -t ${dockerImage} ."
-                    sh "docker push ${dockerImage}"
+                    def imageName = "jeevana1409/application-repo:${env.NEW_VERSION}"
+                    sh "docker build -t ${imageName} ."
+                    sh "docker push ${imageName}"
+                    echo "Docker image pushed: ${imageName}"
                 }
             }
         }
@@ -94,10 +77,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline Succeeded with version ${env.NEW_VERSION}"
+            echo '✅ Pipeline succeeded!'
         }
         failure {
-            echo "❌ Pipeline Failed"
+            echo '❌ Pipeline failed!'
         }
     }
 }
