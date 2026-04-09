@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'Maven'      // must match Jenkins Global Tool Configuration
-        jdk 'Java21'       // add if your build needs Java
+        maven 'Maven'
+        jdk 'Java21'
     }
 
     environment {
@@ -22,22 +22,23 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    git config --global --add safe.directory '*'
-                    git fetch --tags
+                        git config --global --add safe.directory '*'
+                        git fetch --tags
                     '''
 
-                    // Get latest tag (or default)
+                    // Get latest tag, default to v0.0.0 if none exist
                     def latestTag = sh(
-                        script: "git tag --sort=-v:refname | head -n 1 || echo v1.0.0",
+                        script: "git tag --sort=-v:refname | head -n 1 || echo v0.0.0",
                         returnStdout: true
                     ).trim()
 
                     echo "Latest Tag: ${latestTag}"
 
+                    // Extract version numbers safely
                     def version = latestTag.replace("v","").tokenize('.')
-                    def major = version[0]
-                    def minor = version[1]
-                    def patch = version[2].toInteger() + 1
+                    def major = version[0] ?: '0'
+                    def minor = version[1] ?: '0'
+                    def patch = (version.size() > 2 ? version[2].toInteger() : 0) + 1
 
                     env.APP_VERSION = "v${major}.${minor}.${patch}"
                     echo "New Version: ${env.APP_VERSION}"
@@ -47,21 +48,25 @@ pipeline {
                         usernameVariable: 'GIT_USERNAME',
                         passwordVariable: 'GIT_PASSWORD'
                     )]) {
+
                         sh '''
-                        git config user.name "jenkins"
-                        git config user.email "jenkins@local"
+                            git config user.name "jenkins"
+                            git config user.email "jenkins@local"
                         '''
 
+                        // Check if tag already exists
                         def tagExists = sh(
-                            script: "git tag -l ${APP_VERSION}",
+                            script: "git tag -l ${env.APP_VERSION}",
                             returnStdout: true
                         ).trim()
 
-                        if (!tagExists) {
-                            sh "git tag ${APP_VERSION}"
-                            sh "git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/App-Repo.git ${APP_VERSION}"
+                        if (tagExists) {
+                            echo "⚠️ Tag already exists. Skipping tag creation..."
                         } else {
-                            echo "⚠️ Tag already exists, skipping..."
+                            sh """
+                                git tag ${APP_VERSION}
+                                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/App-Repo.git ${APP_VERSION}
+                            """
                         }
                     }
                 }
@@ -101,10 +106,10 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
-                        docker push ${DOCKER_IMAGE}:${APP_VERSION}
-                        docker logout
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
+                            docker push ${DOCKER_IMAGE}:${APP_VERSION}
+                            docker logout
                         """
                     }
                 }
