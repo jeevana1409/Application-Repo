@@ -6,18 +6,37 @@ pipeline {
         jdk 'Java21'
     }
 
+    environment {
+        JAVA_HOME = tool 'Java21'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+    }
+
     stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
         stage('Build & Test') {
             steps {
-                sh "mvn clean verify"
+                sh """
+                java -version
+                mvn -version
+                mvn clean verify
+                """
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh "mvn sonar:sonar"
+                    sh """
+                    mvn sonar:sonar \
+                      -Dsonar.projectKey=ebhook \
+                      -Dsonar.projectName=ebhook
+                    """
                 }
             }
         }
@@ -32,8 +51,9 @@ pipeline {
 
         stage('Create Pull Request to Dev') {
             when {
-                not {
-                    branch 'dev'
+                allOf {
+                    not { branch 'dev' }
+                    not { branch 'main' }
                 }
             }
             steps {
@@ -43,7 +63,8 @@ pipeline {
 
                     withCredentials([string(credentialsId: 'github-cred', variable: 'GITHUB_TOKEN')]) {
                         sh """
-                        curl -X POST https://api.github.com/repos/jeevana1409/Application-Repo/pulls \
+                        curl -s -o response.json -w "%{http_code}" \
+                        -X POST https://api.github.com/repos/jeevana1409/Application-Repo/pulls \
                         -H "Authorization: token \$GITHUB_TOKEN" \
                         -H "Accept: application/vnd.github+json" \
                         -d '{
