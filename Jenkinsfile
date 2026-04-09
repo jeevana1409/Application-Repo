@@ -1,75 +1,117 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven'
+        jdk 'Java21'
+    }
+
     environment {
-        JAVA_HOME = tool name: 'Java21', type: 'jdk'
-        PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
-        MAVEN_HOME = tool name: 'Maven', type: 'maven'
-        PATH = "${MAVEN_HOME}/bin:${env.PATH}"
+        DOCKER_IMAGE = "jeevan204/myapp"
     }
 
     stages {
 
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                    branches: [[name: 'Develop']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/jeevana1409/Application-Repo.git',
-                        credentialsId: 'github-tokens'
-                    ]]
-                ])
+                checkout scm
             }
         }
 
         stage('Auto Version Increment') {
             steps {
                 script {
-                    // Get latest tag
-                    def latestTag = sh(script: "git tag --sort=-v:refname | head -n 1", returnStdout: true).trim()
+                    sh '''
+                        git config --global --add safe.directory '*'
+                        git fetch --tags
+                    '''
+
+                    // Get latest tag, default to v0.0.0 if none exist
+                    def latestTag = sh(
+                        script: "git tag --sort=-v:refname | head -n 1 || echo v0.0.0",
+                        returnStdout: true
+                    ).trim()
+
                     echo "Latest Tag: ${latestTag}"
 
-                    // Extract version numbers
-                    def (major, minor, patch) = latestTag.replace('v', '').tokenize('.').collect { it.toInteger() }
+                    // Extract version numbers safely
+                    def version = latestTag.replace("v","").tokenize('.')
+                    def major = version[0] ?: '0'
+                    def minor = version[1] ?: '0'
+                    def patch = (version.size() > 2 ? version[2].toInteger() : 0) + 1
 
-                    // Increment patch version
-                    patch += 1
-                    env.NEW_VERSION = "v${major}.${minor}.${patch}"
-                    echo "New Version: ${env.NEW_VERSION}"
+                    env.APP_VERSION = "v${major}.${minor}.${patch}"
+                    echo "New Version: ${env.APP_VERSION}"
 
-                    // Create git tag
-                    sh "git tag ${env.NEW_VERSION}"
-                    sh "git push origin ${env.NEW_VERSION}"
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-tokens',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )]) {
+
+                        sh '''
+                            git config user.name "jenkins"
+                            git config user.email "jenkins@local"
+                        '''
+
+                        // Check if tag already exists
+                        def tagExists = sh(
+                            script: "git tag -l ${env.APP_VERSION}",
+                            returnStdout: true
+                        ).trim()
+
+                        if (tagExists) {
+                            echo "⚠️ Tag already exists. Skipping tag creation..."
+                        } else {
+                            sh """
+                                git tag ${APP_VERSION}
+                                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jeevana1409/App-Repo.git ${APP_VERSION}
+                            """
+                        }
+                    }
                 }
+            }
+        }
+
+        stage('Update Maven Version') {
+            steps {
+                sh "mvn versions:set -DnewVersion=${APP_VERSION}"
             }
         }
 
         stage('Build WAR') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh "mvn clean package -DskipTests"
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh 'mvn test'
+                sh "mvn test"
             }
         }
 
         stage('Security Scan') {
             steps {
-                echo 'Running security scan...' 
-                // Example: add your actual security scan tool here
+                sh "trivy fs --severity HIGH,CRITICAL --exit-code 1 ."
             }
         }
 
         stage('Docker Build & Push') {
             steps {
                 script {
-                    def imageName = "jeevana1409/application-repo:${env.NEW_VERSION}"
-                    sh "docker build -t ${imageName} ."
-                    sh "docker push ${imageName}"
-                    echo "Docker image pushed: ${imageName}"
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker build -t ${DOCKER_IMAGE}:${APP_VERSION} .
+                            docker push ${DOCKER_IMAGE}:${APP_VERSION}
+                            docker logout
+                        """
+                    }
                 }
             }
         }
@@ -77,10 +119,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Pipeline succeeded!'
+            echo "✅ Pipeline Completed Successfully"
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo "❌ Pipeline Failed"
         }
     }
 }
