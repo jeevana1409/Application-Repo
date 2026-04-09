@@ -3,10 +3,11 @@ pipeline {
 
     tools {
         maven 'Maven'
-        jdk 'jdk21'
     }
 
     environment {
+        JAVA_HOME = "/usr/lib/jvm/java-21-amazon-corretto.x86_64"
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
         DOCKER_IMAGE = "jeevan204/myapp"
     }
 
@@ -67,57 +68,32 @@ pipeline {
 
         stage('Verify Java & Maven') {
             steps {
-                script {
-                    def javaHome = tool 'jdk21'
-                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
-                        sh 'java -version'
-                        sh 'mvn -version'
-                    }
-                }
+                sh 'java -version'
+                sh 'mvn -version'
             }
         }
 
         stage('Update Maven Version') {
             steps {
-                script {
-                    def javaHome = tool 'jdk21'
-                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
-                        sh "mvn versions:set -DnewVersion=${APP_VERSION} -DgenerateBackupPoms=false"
-                    }
-                }
+                sh "mvn versions:set -DnewVersion=${APP_VERSION} -DgenerateBackupPoms=false"
             }
         }
 
         stage('Build & Package') {
             steps {
-                script {
-                    def javaHome = tool 'jdk21'
-                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
-                        sh "mvn clean package -DskipTests"
-                    }
-                }
+                sh "mvn clean package -DskipTests"
             }
         }
 
         stage('Run Tests') {
             steps {
-                script {
-                    def javaHome = tool 'jdk21'
-                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
-                        sh "mvn test"
-                    }
-                }
+                sh "mvn test"
             }
         }
 
         stage('Deploy to Nexus') {
             steps {
-                script {
-                    def javaHome = tool 'jdk21'
-                    withEnv(["JAVA_HOME=${javaHome}", "PATH=${javaHome}/bin:${env.PATH}"]) {
-                        sh "mvn deploy -DskipTests"
-                    }
-                }
+                sh "mvn deploy -DskipTests"
             }
         }
 
