@@ -3,7 +3,7 @@ pipeline {
 
     tools {
         maven 'Maven'
-        jdk 'jdk21'   // ✅ MUST match Jenkins Global Tool config name
+        jdk 'jdk21'
     }
 
     environment {
@@ -33,9 +33,26 @@ pipeline {
                     def version = latestTag.replace("v","").tokenize('.')
                     def major = version[0]
                     def minor = version[1]
-                    def patch = version[2].toInteger() + 1
+                    def patch = version[2].toInteger()
 
-                    env.APP_VERSION = "v${major}.${minor}.${patch}"
+                    def newTag = ""
+                    def tagExists = true
+
+                    while(tagExists) {
+                        patch = patch + 1
+                        newTag = "v${major}.${minor}.${patch}"
+
+                        def status = sh(
+                            script: "git rev-parse ${newTag} >/dev/null 2>&1 || echo 'notfound'",
+                            returnStdout: true
+                        ).trim()
+
+                        if (status == "notfound") {
+                            tagExists = false
+                        }
+                    }
+
+                    env.APP_VERSION = newTag
                     echo "New Version: ${APP_VERSION}"
 
                     withCredentials([usernamePassword(
