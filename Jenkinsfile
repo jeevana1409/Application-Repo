@@ -1,16 +1,26 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-        jdk 'Java21'
-    }
-
     environment {
         DOCKER_IMAGE = "jeevan204/myapp"
     }
 
     stages {
+
+        stage('Setup Tools') {
+            steps {
+                script {
+                    // Set Maven
+                    def mvnHome = tool name: 'Maven', type: 'maven'
+                    env.PATH = "${mvnHome}/bin:${env.PATH}"
+
+                    // Set JDK
+                    def javaHome = tool name: 'jdk21', type: 'jdk'
+                    env.JAVA_HOME = javaHome
+                    env.PATH = "${javaHome}/bin:${env.PATH}"
+                }
+            }
+        }
 
         stage('Checkout') {
             steps {
@@ -56,28 +66,24 @@ pipeline {
 
         stage('Update Maven Version') {
             steps {
-                // Update version for all modules
                 sh "mvn versions:set -DnewVersion=${APP_VERSION} -DgenerateBackupPoms=false"
             }
         }
 
         stage('Build & Package') {
             steps {
-                // Clean build for entire multi-module project
                 sh "mvn clean package -DskipTests"
             }
         }
 
         stage('Run Tests') {
             steps {
-                // Run all tests in multi-module project
                 sh "mvn test"
             }
         }
 
         stage('Deploy to Nexus') {
             steps {
-                // Deploy all modules to Nexus
                 sh "mvn deploy -DskipTests"
             }
         }
@@ -98,10 +104,7 @@ pipeline {
                     )]) {
                         sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        
-                        # Build Docker image from webapp WAR
                         docker build -t ${DOCKER_IMAGE}:${APP_VERSION} -f webapp/Dockerfile .
-                        
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
                         docker logout
                         """
