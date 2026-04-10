@@ -121,6 +121,16 @@ pipeline {
                 }
             }
         }
+
+        stage('Trigger Deployment Repo') {
+            steps {
+                build job: 'deployment-repo-job-name',
+                parameters: [
+                    string(name: 'BRANCH_NAME', value: 'dev'),
+                    string(name: 'APP_VERSION', value: "${APP_VERSION}")
+                ]
+            }
+        }
     }
 
     post {
