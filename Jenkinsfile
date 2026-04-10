@@ -113,7 +113,7 @@ pipeline {
                     )]) {
                         sh '''
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} -f webapp/Dockerfile .
+                        docker build -t ${DOCKER_IMAGE}:${APP_VERSION} -f Dockerfile .
                         docker push ${DOCKER_IMAGE}:${APP_VERSION}
                         docker logout
                         '''
